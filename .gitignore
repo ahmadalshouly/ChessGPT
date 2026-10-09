@@ -6,6 +6,7 @@ venv
 
 # Local secrets and runtime files
 .env
+.env.example
 __pycache__/
 *.py[cod]
 instance/
