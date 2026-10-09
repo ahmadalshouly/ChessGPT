@@ -1,10 +1,22 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
-
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}My games · ChessGPT{% endblock %}
+{% block content %}
+<section class="section-heading dashboard-heading">
+    <div><div class="eyebrow">Your study room</div><h1>Welcome back, <em>{{ user.username }}</em>.</h1><p>Pick up where your curiosity left off.</p></div>
+    <a class="button button-primary" href="{{ url_for('main.upload') }}"><span>+</span> Analyze a game</a>
+</section>
+{% if games %}
+<section class="library-head"><div><span class="section-kicker">Game library</span><h2>{{ games|length }} {% if games|length == 1 %}game{% else %}games{% endif %}</h2></div><span class="mono-label">LATEST FIRST ↓</span></section>
+<section class="game-grid">
+{% for game in games %}
+    <a class="game-card" href="{{ url_for('main.game', game_id=game.id) }}">
+        <div class="game-card-top"><span class="game-badge">♟</span><span class="card-date">{{ game.created_at.strftime('%b %d, %Y') }}</span></div>
+        <h3>{{ game.title }}</h3>
+        <div class="game-card-bottom"><span>Open analysis</span><span class="arrow-circle">→</span></div>
+    </a>
+{% endfor %}
+</section>
+{% else %}
+<section class="empty-state"><div class="empty-icon">♞</div><h2>Your board is waiting.</h2><p>Upload a game to start an analysis session with your AI coach.</p><a class="button button-primary" href="{{ url_for('main.upload') }}">Upload your first game <span>→</span></a></section>
+{% endif %}
+{% endblock %}

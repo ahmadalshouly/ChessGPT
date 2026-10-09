@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% block title %}{{ game.title }} · ChessGPT{% endblock %}
+{% block content %}
+<div class="game-session-head">
+  <div><a class="back-link" href="{{ url_for('main.dashboard') }}">← My games</a><h1>{{ game.title }}</h1><span class="session-meta">POSITIONAL STUDY · {{ fens|length - 1 }} MOVES</span></div>
+  <div class="session-status"><span class="live-dot"></span> Coach ready</div>
+</div>
+
+<div class="analysis-layout">
+  <!-- Board -->
+  <div class="board-column">
+    <div id="player-top" class="player-label"></div>
+    <div id="board"></div>
+    <div id="player-bottom" class="player-label"></div>
+
+    <div class="board-controls">
+      <button class="control-button" onclick="prev()" aria-label="Previous move">←</button>
+      <button class="control-button" onclick="next()" aria-label="Next move">→</button>
+      <button class="rotate-button" onclick="flipBoard()">⟲ Rotate</button>
+      <span id="move-num" class="move-counter">0 / {{ fens|length - 1 }}</span>
+    </div>
+  </div>
+
+  <!-- Analysis -->
+  <div class="analysis-rail">
+    <div class="engine-card">
+      <div class="panel-heading"><div><span class="section-kicker">Engine room</span><h2>Position evaluation</h2></div><span class="engine-badge">STOCKFISH</span></div>
+      <form id="analysis-form" method="post" action="{{ url_for('main.evaluate_with_lichess', game_id=game.id) }}">
+        <button id="analysis-button" class="button button-primary full-button" type="submit">Analyze all positions <span>→</span></button>
+      </form>
+      <div id="analysis-progress" class="activity-indicator" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Lichess and Stockfish are analyzing every position. This may take a moment.</span>
+      </div>
+      <div id="current-lichess-eval" class="eval-readout"></div>
+      <div id="current-lichess-lines" class="engine-lines"></div>
+    </div>
+
+    <div class="coach-card"><div class="panel-heading"><div><span class="section-kicker">Continuous conversation</span><h2>Your AI coach</h2></div><span class="coach-status">● LIVE</span></div>
+    <div id="chat-position-label" class="chat-position-label"></div>
+    <div class="chat-hint">Ask about this position, an earlier move, or the plan for the whole game.</div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <form id="chat-form" onsubmit="sendChatMessage(event)">
+      <textarea id="chat-input" rows="2" placeholder="What did I miss here?" required></textarea>
+      <button class="send-button" type="submit">Send <span>↗</span></button>
+    </form>
+    </div>
+  </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+
+<script>
+  const gameId = {{ game.id }};
+  const fens = {{ fens | tojson }};
+  const moves = {{ moves | tojson }};
+  const movesEval = {{ move_evals | tojson }};
+
+  const whiteLabel = {{ (white_name ~ (' (' ~ white_elo ~ ')' if white_elo else '')) | tojson }};
+  const blackLabel = {{ (black_name ~ (' (' ~ black_elo ~ ')' if black_elo else '')) | tojson }};
+
+  const analysisForm = document.getElementById('analysis-form');
+  analysisForm.addEventListener('submit', () => {
+    const button = document.getElementById('analysis-button');
+    button.disabled = true;
+    button.textContent = 'Analyzing...';
+    document.getElementById('analysis-progress').hidden = false;
+  });
+  window.addEventListener('pageshow', () => {
+    const button = document.getElementById('analysis-button');
+    button.disabled = false;
+    button.textContent = 'Analyze All Positions';
+    document.getElementById('analysis-progress').hidden = true;
+  });
+
+  let idx = 0;
+
+  const board = Chessboard('board', {
+    position: fens[0],
+    // Use Lichess's reliable CDN for the pieces
+    pieceTheme: 'https://lichess1.org/assets/piece/cburnett/{piece}.svg'
+  });
+
+  function renderPlayerLabels() {
+    // White sits at the bottom, black at the top, unless the board is flipped.
+    const topEl = document.getElementById('player-top');
+    const bottomEl = document.getElementById('player-bottom');
+    if (board.orientation() === 'white') {
+      topEl.textContent = blackLabel;
+      bottomEl.textContent = whiteLabel;
+    } else {
+      topEl.textContent = whiteLabel;
+      bottomEl.textContent = blackLabel;
+    }
+  }
+
+  function flipBoard() {
+    board.flip();
+    renderPlayerLabels();
+  }
+
+  // movesEval[idx] is White-perspective, matching Lichess's convention:
+  // {"cp": n} -> n/100 pawns, positive = good for White.
+  // {"mate": n} -> forced mate in |n|; positive = White mates.
+  // null -> no cached evaluation for this position.
+  function formatEval(evalObj) {
+    if (!evalObj) return 'No engine evaluation yet. Analyze all positions or configure local Stockfish.';
+    const source = evalObj.source === 'stockfish' ? 'Stockfish' : 'Lichess';
+    if ('mate' in evalObj) {
+      const n = evalObj.mate;
+      return `${source} eval: mate in ${Math.abs(n)} for ${n > 0 ? 'White' : 'Black'}`;
+    }
+    if ('cp' in evalObj) {
+      const pawns = (evalObj.cp / 100).toFixed(2);
+      const sign = evalObj.cp > 0 ? '+' : '';
+      return `${source} eval: ${sign}${pawns} (White's perspective)`;
+    }
+    return 'No engine evaluation available for this position.';
+  }
+
+  function formatScore(line) {
+    if ('mate' in line && line.mate !== undefined && line.mate !== null) {
+      return `#${line.mate}`;
+    }
+    if ('cp' in line && line.cp !== undefined && line.cp !== null) {
+      const pawns = (line.cp / 100).toFixed(2);
+      return (line.cp > 0 ? '+' : '') + pawns;
+    }
+    return '?';
+  }
+
+  function formatCandidateMoves(evalObj) {
+    if (!evalObj || !evalObj.candidate_moves || !evalObj.candidate_moves.length) return '';
+    return 'Engine suggests: ' + evalObj.candidate_moves
+      .map(line => `${line.san || '?'} (${formatScore(line)})`)
+      .join('  ·  ');
+  }
+
+  function render() {
+    board.position(fens[idx]);
+    document.getElementById('move-num').textContent =
+      `${idx} / ${fens.length - 1}`;
+
+    document.getElementById('chat-position-label').textContent = chatPositionLabel(idx);
+
+    const evalEl = document.getElementById('current-lichess-eval');
+    if (evalEl) evalEl.textContent = formatEval(movesEval[idx]);
+
+    const linesEl = document.getElementById('current-lichess-lines');
+    if (linesEl) linesEl.textContent = formatCandidateMoves(movesEval[idx]);
+  }
+
+  function next() { if (idx < fens.length - 1) { idx++; render(); } }
+  function prev() { if (idx > 0) { idx--; render(); } }
+
+  // --- Continuous game chat ---------------------------------------------
+  // Each question uses the displayed ply, while history remains one
+  // continuous conversation for the entire game.
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function chatPositionLabel(ply) {
+    if (ply === 0) return 'Discussing: start position';
+    const moveIndex = ply - 1;
+    const moveNumber = Math.floor(moveIndex / 2) + 1;
+    const side = moveIndex % 2 === 0 ? '.' : '...';
+    const sideToMove = ply % 2 === 0 ? 'White' : 'Black';
+    return `Discussing board position ${ply}: after ${moveNumber}${side} ${moves[moveIndex] || '?'}; ${sideToMove} to move`;
+  }
+
+  function renderChatMessages(messages) {
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    if (!messages.length) {
+      container.innerHTML = '<div style="color:#999;">No questions yet about this position.</div>';
+      return;
+    }
+    messages.forEach(m => {
+      const div = document.createElement('div');
+      div.style.margin = '6px 0';
+      div.innerHTML = `<strong>${m.role === 'user' ? 'You' : 'Coach'}:</strong> ${escapeHtml(m.content)}`;
+      container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function loadChat() {
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '<div style="color:#999;">Loading…</div>';
+
+    try {
+      const res = await fetch(`/game/${gameId}/chat`);
+      if (!res.ok) throw new Error('failed to load chat');
+      const messages = await res.json();
+      renderChatMessages(messages);
+    } catch (e) {
+      container.innerHTML = '<div style="color:#c00;">Could not load chat history.</div>';
+    }
+  }
+
+  async function sendChatMessage(event) {
+    event.preventDefault();
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const sendBtn = event.target.querySelector('button');
+    sendBtn.disabled = true;
+    input.disabled = true;
+
+    const container = document.getElementById('chat-messages');
+    if (container.textContent.includes('No questions yet')) container.innerHTML = '';
+    const userDiv = document.createElement('div');
+    userDiv.style.margin = '6px 0';
+    userDiv.innerHTML = `<strong>You:</strong> ${escapeHtml(message)}`;
+    container.appendChild(userDiv);
+    container.scrollTop = container.scrollHeight;
+    input.value = '';
+
+    const askedAboutPly = idx;
+
+    const replyDiv = document.createElement('div');
+    replyDiv.style.margin = '6px 0';
+    replyDiv.innerHTML = '<strong>Coach:</strong> ';
+    const replyText = document.createElement('span');
+    replyText.className = 'chat-thinking';
+    replyText.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Thinking about this position...</span>';
+    replyDiv.appendChild(replyText);
+    container.appendChild(replyDiv);
+    container.scrollTop = container.scrollHeight;
+
+    async function sendNonStreamingFallback() {
+      const fallback = await fetch(`/game/${gameId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ply: askedAboutPly, message })
+      });
+      const data = await fallback.json();
+      if (!fallback.ok) throw new Error(data.error || 'chat failed');
+      replyText.className = '';
+      replyText.textContent = data.reply;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    let reply = '';
+    try {
+      const res = await fetch(`/game/${gameId}/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ply: askedAboutPly, message })
+      });
+      if (!res.ok || !res.body) throw new Error('stream unavailable');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line);
+          if (event.error) throw new Error(event.error);
+          if (event.delta) {
+            reply += event.delta;
+            replyText.className = '';
+            replyText.textContent = reply;
+            container.scrollTop = container.scrollHeight;
+          }
+        }
+        if (done) break;
+      }
+    } catch (e) {
+      console.error('Streaming coach response failed:', e);
+      if (!reply) {
+        try {
+          await sendNonStreamingFallback();
+          return;
+        } catch (fallbackError) {
+          console.error('Non-streaming coach response failed:', fallbackError);
+        }
+      }
+      replyDiv.remove();
+      const errDiv = document.createElement('div');
+      errDiv.style.color = '#c00';
+      errDiv.textContent = 'Message failed to send. Please try again.';
+      container.appendChild(errDiv);
+    } finally {
+      sendBtn.disabled = false;
+      input.disabled = false;
+      input.focus();
+    }
+  }
+
+  renderPlayerLabels();
+  render();
+  loadChat();
+</script>
+{% endblock %}

@@ -2,9 +2,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#101414">
+    <title>{% block title %}ChessGPT{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <div class="site-noise"></div>
+    <nav class="topbar">
+        <a class="brand" href="{{ url_for('main.index') }}" aria-label="ChessGPT home">
+            <span class="brand-mark">♞</span>
+            <span>chess<span class="brand-accent">gpt</span></span>
+        </a>
+        <div class="nav-links">
+            {% if session.user_id %}
+                <a href="{{ url_for('main.dashboard') }}">My games</a>
+                <a class="nav-cta" href="{{ url_for('main.upload') }}"><span>+</span> New analysis</a>
+                <a class="avatar" href="{{ url_for('main.logout') }}" title="Log out">↗</a>
+            {% else %}
+                <a href="{{ url_for('main.login') }}">Log in</a>
+                <a class="nav-cta" href="{{ url_for('main.register') }}">Get started <span>→</span></a>
+            {% endif %}
+        </div>
+    </nav>
 
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flash-stack" aria-live="polite">
+                {% for message in messages %}<div class="flash-message"><span>✦</span>{{ message }}</div>{% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <main class="page-shell">{% block content %}{% endblock %}</main>
+    <footer class="site-footer"><span>ChessGPT</span><span>Engine-backed. Human-minded.</span></footer>
 </body>
 </html>

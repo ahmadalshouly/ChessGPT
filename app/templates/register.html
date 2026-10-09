@@ -1,10 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
-
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Create account · ChessGPT{% endblock %}
+{% block content %}
+<section class="auth-page"><div class="auth-aside"><span class="brand-mark large">♞</span><div class="eyebrow">Learn from every game</div><h1>Play more.<br><em>Understand more.</em></h1><p>A calm, curious coach for the moves you almost saw.</p></div><form class="auth-card" method="POST"><div class="eyebrow">Get started</div><h2>Create your account</h2><p class="form-subtitle">Your personal chess study room is one minute away.</p><div class="field"><label for="username">Username</label><input id="username" type="text" name="username" placeholder="Choose a username" required autocomplete="username"></div><div class="field"><label for="email">Email</label><input id="email" type="email" name="email" placeholder="you@example.com" required autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" type="password" name="password" placeholder="At least 8 characters" required autocomplete="new-password"></div><button class="button button-primary full-button" type="submit">Create account <span>→</span></button><p class="form-switch">Already have an account? <a href="{{ url_for('main.login') }}">Log in</a></p></form></section>
+{% endblock %}

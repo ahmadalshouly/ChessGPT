@@ -3,3 +3,9 @@ venv
 
 # idea
 .idea
+
+# Local secrets and runtime files
+.env
+__pycache__/
+*.py[cod]
+instance/

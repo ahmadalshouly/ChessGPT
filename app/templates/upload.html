@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}New analysis · ChessGPT{% endblock %}
+{% block content %}
+<section class="form-page">
+    <div class="form-intro"><a class="back-link" href="{{ url_for('main.dashboard') }}">← Back to my games</a><div class="eyebrow">Start a session</div><h1>Bring a game.<br><em>Leave with insight.</em></h1><p>Paste a PGN from Lichess, Chess.com, or your own notes. We’ll set up the board, evaluate every position, and keep your coach in context.</p></div>
+    <form class="editor-card" method="POST">
+        <div class="field"><label for="title">Game name <span>Optional</span></label><input id="title" type="text" name="title" placeholder="e.g. Friday night rapid" autocomplete="off"></div>
+        <div class="field"><div class="label-row"><label for="pgn_text">PGN notation</label><span class="mono-label">PASTE BELOW</span></div><textarea id="pgn_text" name="pgn_text" rows="16" placeholder="[Event &quot;Casual game&quot;]\n[White &quot;You&quot;]\n[Black &quot;Opponent&quot;]\n\n1. e4 e5 2. Nf3 ..." required></textarea></div>
+        <div class="form-footer"><span class="security-note">✦ Your games stay private</span><button class="button button-primary" type="submit">Create analysis <span>→</span></button></div>
+    </form>
+</section>
+{% endblock %}
